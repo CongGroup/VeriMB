@@ -12,8 +12,8 @@ void DFCAdaptor::init(const PatternSet& patterns) {
                    const_cast<Byte *>(patterns[i].data()),
                    patterns[i].size(), 1, i, i);
 
-  for(int i=0; i<NUM_RANDOM_MULTIPLIERS; ++i)
-    random_multiplier[i] = rand()%0xFFFF;
+  for (int i = 0; i < NUM_RANDOM_MULTIPLIERS; ++i)
+    random_multiplier[i] = i;//rand()%0xFFFF;
 
   DFC_Compile(m_dfc);
 }
@@ -40,9 +40,10 @@ int match_action(void *, void *, int pid, void *, void *) {
     return 0;
 }
 
-void DFCAdaptor::process(const unsigned char* payload, int length, std::string& ringer) {
+void DFCAdaptor::process(uint16_t id, const unsigned char* payload, int length, std::string& ringer) {
     ringer.clear();
     DFC_Search(m_dfc, 
+               id,
                const_cast<unsigned char*>(payload),
                length, 
                ringer,

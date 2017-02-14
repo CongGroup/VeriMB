@@ -16,7 +16,7 @@ void PatternLoader::load_pattern_file(const char* file, PatternSet& ptnSet) {
             if (!line.empty())
                 ptnSet.push_back(ptrn_str_to_bytes(line));
         }
-        printf("%s loaded!\n", file);
+        //printf("%s loaded!\n", file);
     }
 }
 

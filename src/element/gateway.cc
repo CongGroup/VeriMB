@@ -17,6 +17,7 @@
 #include <verimb/pattern_loader.h>
 
 #include <algorithm>
+#include <unistd.h>
 
 CLICK_DECLS
 
@@ -59,13 +60,13 @@ Gateway::configure(Vector<String> &conf, ErrorHandler* errh) {
 
     //m_config.pattern_file = "./test";
     PatternSet patterns;
-    PatternLoader::load_pattern_file("./snort.pat", patterns);
+    PatternLoader::load_pattern_file("./icnp.pat", patterns);
     m_dfc.init(patterns);
     if (ringer_switch)
       m_dfc.turn_on_ringer();
     else
       m_dfc.turn_off_ringer();
-    click_chatter("DFC initialized with %d patterns and ringer %s!\n", patterns.size(), ringer_switch ? "ON" : "OFF");
+    //click_chatter("DFC initialized with %d patterns and ringer %s!\n", patterns.size(), ringer_switch ? "ON" : "OFF");
 
     //m_batch_latency.open("batch_latency.txt");
     m_sent_batch_count = 0;
@@ -75,8 +76,14 @@ Gateway::configure(Vector<String> &conf, ErrorHandler* errh) {
 
 int Gateway::initialize(ErrorHandler *errh)
 {
-  click_chatter("Gateway initialized!\n");
-  //click_chatter("Preprocessing batches...\n");
+  click_chatter("===============================================\n");
+  click_chatter("Batch size\t\t:\t%d\n", m_config.batch_size);
+  click_chatter("#Ringers real/fake\t:\t%d/%d\n", m_config.num_real, m_config.num_fake);
+  click_chatter("===============================================\n");
+  click_chatter("Proprocessing batches...\n");
+  click_chatter("Verification...\n");
+  click_chatter("===============================================\n");
+  click_chatter("  Batch    #Verified    #Unverified    Result\n");
   return 0;
 }
 
@@ -138,7 +145,7 @@ Packet* Gateway::pull(int port) {
       // last packet in a batch
       if (net_to_host_order(rip->_option.packet_id) == (m_config.batch_size - 1)) {
        // clock_gettime(CLOCK_REALTIME, &batch_last_end);
-        click_chatter("Sent %d batches!\n", ++m_sent_batch_count);
+        //click_chatter("Sent %d batches!\n", ++m_sent_batch_count);
       }
       return p;
     }
@@ -194,11 +201,15 @@ void Gateway::verify_proof(Packet* p) {
         }
     }
 
-    //usleep(500000);
-    /*click_chatter("Verification for batch %d %s: expected %d, verified %d, unverified %d\n",
-    batch_id, verified==batch_proof.size() && unverified==0 ?"**PASS**":"**FAIL**", batch_proof.size(), verified, unverified);*/
+    usleep(100000);
+    click_chatter("    %d\t\t%d\t     %d\t\t%s\n", batch_id, verified, unverified, verified == batch_proof.size() && unverified == 0 ? "PASS" : "FAIL");
 
     m_proof_dict.erase(batch_id);
+}
+
+uint16_t get_packet_id(Packet * p) {
+  const ringer_ip *ip = reinterpret_cast<const ringer_ip *>(p->data() + ETHER_LEN);
+  return ip->_option.packet_id; // no conversion of byte order
 }
 
 void Gateway::process_current_batch() {
@@ -212,20 +223,26 @@ void Gateway::process_current_batch() {
   */
   std::random_shuffle(m_secrets_pool.begin(), m_secrets_pool.end());
   std::vector<int> secret(m_secrets_pool.begin(), m_secrets_pool.begin() + m_config.num_real);
+  // debug
+  /*secret.pop_back();
+  secret.push_back(0);*/
+  //
   for (int i = 0; i < m_config.num_real; ++i) {
-    m_dfc.process(m_pending_queue[secret[i]]->data()+RINGER_UDP_PAYLOAD_OFFSET, 
-                  m_pending_queue[secret[i]]->length()-RINGER_UDP_PAYLOAD_OFFSET, 
+    Packet* p = m_pending_queue[secret[i]];
+    m_dfc.process(net_to_host_order(get_packet_id(p)),
+                  p->data()+RINGER_UDP_PAYLOAD_OFFSET, 
+                  p->length()-RINGER_UDP_PAYLOAD_OFFSET, 
                   ringer);
     m_current_ringers.push_back(ringer);
-    m_proof_dict[m_current_batchid].push_back(secret[i]);
+    m_proof_dict[m_current_batchid].push_back(secret[i]); 
   }
-
+  //click_chatter("Batch %d %d: %s\n", m_current_batchid, net_to_host_order(get_packet_id(m_pending_queue[0])), ringer.c_str());
   /* Fake ringers */
   for (int i = 0; i < m_config.num_fake; ++i) {
     make_fake_ringer(ringer);
     m_current_ringers.push_back(ringer);
   }
-
+  
   /* Ringer packet */
   Packet *ringer_packet = make_ringer_packet(m_pending_queue.front());
 

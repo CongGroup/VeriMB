@@ -58,13 +58,13 @@ Middlebox::configure(Vector<String> &conf, ErrorHandler* errh) {
 
   //m_config.pattern_file = "./test";
   PatternSet patterns;
-  PatternLoader::load_pattern_file("./snort.pat", patterns);
+  PatternLoader::load_pattern_file("./icnp.pat", patterns);
   m_dfc.init(patterns);
   if (ringer_switch)
     m_dfc.turn_on_ringer();
   else
     m_dfc.turn_off_ringer();
-  click_chatter("DFC initialized with %d patterns and ringer %s!\n", patterns.size(), ringer_switch?"ON":"OFF");
+  //click_chatter("DFC initialized with %d patterns and ringer %s!\n", patterns.size(), ringer_switch?"ON":"OFF");
 
   //m_process_time.open("./proctime.txt");
   m_process_count_all = 0;
@@ -75,9 +75,14 @@ Middlebox::configure(Vector<String> &conf, ErrorHandler* errh) {
 
 int Middlebox::initialize(ErrorHandler *errh)
 {
-  click_chatter("Middlebox initialized!");
-  click_chatter("effort_level   : %d%%\n", m_config.effort_level);
-  //click_chatter("target_workload: %d\n", m_config.target_workload);
+  click_chatter("===============================================\n");
+  click_chatter("Batch size\t:\t%d\n", m_config.batch_size);
+  click_chatter("Effort level\t:\t%d%%\n", m_config.effort_level);
+  click_chatter("===============================================\n");
+  click_chatter("Processing batches...\n");
+  click_chatter("Proof generation...\n");
+  click_chatter("===============================================\n");
+  click_chatter("  Batch    #Recovered    #Guessed\n");
   return 0;
 }
 
@@ -157,18 +162,17 @@ void Middlebox::handle_ringer(Packet* in_p) {
 
 	const char* payload = reinterpret_cast<const char*>(in_p->data()+RINGER_UDP_PAYLOAD_OFFSET);
 	int payload_len = in_p->length()- RINGER_UDP_PAYLOAD_OFFSET;
-    int num_ringer = payload_len / RINGER_SIZE;
+  int num_ringer = payload_len / RINGER_SIZE;
   
-    assert(reinterpret_cast<const ringer_ip *>(in_p->data() + ETHER_LEN)->_option.ringer_count == num_ringer);
+  assert(reinterpret_cast<const ringer_ip *>(in_p->data() + ETHER_LEN)->_option.ringer_count == num_ringer);
 
-    std::vector<std::string>& ringers = m_ringers[batch_id];
+  std::vector<std::string>& ringers = m_ringers[batch_id];
 	for (int i = 0; i < num_ringer; ++i)
-        ringers.push_back(std::string(payload+i*RINGER_SIZE, RINGER_SIZE));
+    ringers.push_back(std::string(payload+i*RINGER_SIZE, RINGER_SIZE));
 
-  //click_chatter("ringers for batch %d extracted!\n", batch_id);
+  //click_chatter("batch %d : %d ringers!\n", batch_id, num_ringer);
 
 	if (m_early_comers.find(batch_id) != m_early_comers.end()) {
-        
         const std::vector<Packet*>& early_comer = m_early_comers[batch_id];
         int num_early = early_comer.size();
         for (int i = 0; i < num_early; ++i) {
@@ -186,12 +190,12 @@ void Middlebox::process_packet(int batch_id, Packet* in_p) {
   }
   else if (m_process_count_all == 3800000) {
     clock_gettime(CLOCK_REALTIME, &m_time_end);
-    click_chatter("Processed bytes %d\n", m_processed_bytes);
-    click_chatter("Elapsed time %fs\n", mb_time_diff_s(m_time_start, m_time_end));
-    click_chatter("Throughput: %fMbps \n", m_processed_bytes*8.0 / mb_time_diff_s(m_time_start, m_time_end) / 1000000.0);
+    //click_chatter("Processed bytes %d\n", m_processed_bytes);
+    //click_chatter("Elapsed time %fs\n", mb_time_diff_s(m_time_start, m_time_end));
+    //click_chatter("Throughput: %fMbps \n", m_processed_bytes*8.0 / mb_time_diff_s(m_time_start, m_time_end) / 1000000.0);
   }
   else if (m_process_count_all % 100000 == 0) {
-    click_chatter("%d\n", m_process_count_all);
+    //click_chatter("%d\n", m_process_count_all);
   }
   else
     ;
@@ -204,13 +208,18 @@ void Middlebox::process_packet(int batch_id, Packet* in_p) {
   // process the packet honestly
   if (net_to_host_order(packet_id) < m_config.target_workload) {
     std::string in_ringer = "";
-    m_dfc.process(in_p->data() + RINGER_UDP_PAYLOAD_OFFSET,
+    m_dfc.process(net_to_host_order(packet_id),
+                  in_p->data() + RINGER_UDP_PAYLOAD_OFFSET,
                   in_p->length() - RINGER_UDP_PAYLOAD_OFFSET,
                   in_ringer);
     const std::vector<std::string>& ringers = m_ringers[batch_id];
 
     if (std::find(ringers.begin(), ringers.end(), in_ringer) != ringers.end())
         m_proofs[batch_id].push_back(packet_id);
+
+    // debug
+    //if(net_to_host_order(packet_id) == 0)
+    //  click_chatter("Batch %d %d: %s\n", batch_id, net_to_host_order(packet_id), in_ringer.c_str());
   }
 
   ++m_processed_count[batch_id];
@@ -259,8 +268,7 @@ Packet* Middlebox::make_proof_packet(int batch_id, const Packet* ref_pkt) {
   }
   uint16_t payload_len = num_proof * PROOF_SIZE;
 
-  /*click_chatter("Proof generation for batch %d: received ringers %d, recovered %d, guessed %d\n",
-                 batch_id, m_ringers[batch_id].size(), num_recovered, num_gussed);*/
+  click_chatter("    %d\t\t%d\t     %d\n", batch_id, num_recovered, num_gussed);
 
   /* UDP - swap source and destination ports */
   click_udp udp;

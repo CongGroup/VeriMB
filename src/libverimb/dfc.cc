@@ -2132,13 +2132,13 @@ static inline int Progressive_Filtering(PROGRE_ARGUMENT)
 int DFC_Search(SEARCH_ARGUMENT)
 {
 	int i;
-    int matches = 0;
+  int matches = 0;
 
 	if (unlikely(buflen <= 0))
         return 0;
 
   if (RINGER_SWITCH == RINGER_ON) {
-    dfc_accumulation = 0;
+    dfc_accumulation = buf_id;
     random_multipler_idx = 0;
     //dfc_result.clear(); // capacity remains unchanged
     //dfc_size = 30000;

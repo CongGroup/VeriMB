@@ -3,17 +3,15 @@
 #include <cryptopp/hex.h>
 #include <cryptopp/randpool.h>
 
-HMAC::HMAC() {
-  /**
-  * TODO: the key should be negotiated between GW and MB and increment 
-  *       for each batchs, but currently we hardcode it to 0.
-  */
-  //m_key = CryptoPP::SecByteBlock(CryptoPP::SHA256::BLOCKSIZE);
-  m_key = CryptoPP::SecByteBlock(CryptoPP::SHA1::BLOCKSIZE);
+#include <iostream>
 
-  // initialize hamc
-  //m_hmac = CryptoPP::HMAC< CryptoPP::SHA256 >(m_key, m_key.size());
-  m_hmac = CryptoPP::HMAC< CryptoPP::SHA1 >(m_key, m_key.size());
+/**
+* TODO: the key should be negotiated between GW and MB and increment
+*       for each batchs, but currently we hardcode it to 0.
+*/
+HMAC::HMAC():
+  m_key  (0, CryptoPP::SHA1::BLOCKSIZE),
+  m_hmac (m_key, m_key.size()) {
 }
 
 void HMAC::operator()(const Byte* data, int data_size, std::string& hmac) {

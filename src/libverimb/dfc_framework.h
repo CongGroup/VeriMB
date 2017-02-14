@@ -14,6 +14,7 @@
 
 #define SEARCH_ARGUMENT \
                         DFC_STRUCTURE *dfc, \
+                        uint16_t buf_id,    \
                         unsigned char *buf, \
                         int buflen, \
                         std::string& ringer, \

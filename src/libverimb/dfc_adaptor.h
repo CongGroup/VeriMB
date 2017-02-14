@@ -21,7 +21,7 @@ class DFCAdaptor
     
   ~DFCAdaptor();
     
-  void process(const unsigned char* payload, int length, std::string& ringer);
+  void process(uint16_t id, const unsigned char* payload, int length, std::string& ringer);
 
   void turn_on_ringer() const;
 
